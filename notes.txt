@@ -1,0 +1,13 @@
+WITH STREAM
+[mark@devtools upload-stream-to-s3]$ node send-form.js 
+2024-02-14T20:37:53.051Z start
+2024-02-14T20:38:38.732Z end
+
+
+NON STREAM
+[mark@devtools upload-stream-to-s3]$ node send-form.js 
+2024-02-14T20:38:51.103Z start
+2024-02-14T20:39:37.727Z end
+[mark@devtools upload-stream-to-s3]$ 
+
+https://www.google.com
