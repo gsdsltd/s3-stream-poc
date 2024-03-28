@@ -1,24 +1,16 @@
-import { Readable } from "stream";
 import { PassThrough } from 'stream';
 import { Upload } from "@aws-sdk/lib-storage";
 import * as AWSConfigV3 from './AWSConfigV3.js';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 const bucket = "mc-stream-test-awc-dybs3m3";
 
-const downloadStream = () => {
-    let eventCount = 0;
-    const mockEventStream = new Readable({
-        objectMode: true,
-      read: function (size) {
-        if (eventCount < 10) {
-          eventCount = eventCount + 1;
-          return this.push(`event${eventCount}`)
-        } else {
-          return this.push(null);
-        }
-      }
-    });
-    return mockEventStream;
+const downloadStream = async (key) => {
+  const s3Parms = {Bucket: bucket, Key: key};
+  const s3 = AWSConfigV3.awsS3Client();
+  const command = new GetObjectCommand(s3Parms);
+
+  return (await s3.send(command)).Body;    
 };
 
 

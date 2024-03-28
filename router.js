@@ -8,7 +8,7 @@ const router = expres.Router();
 const initialise = () => {
 
     router.post('/store', storage);
-    router.get('/', Retrieve);
+    router.get('/:filename', Retrieve);
 
     return router;
 }

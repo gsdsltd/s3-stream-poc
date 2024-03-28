@@ -16,8 +16,14 @@ const encryptionStream = (keyring) => {
     });
 }
 
+const decryptionStream = (keyring) => {
+    return crypto.buildClient().decryptStream(keyring, {
+        suiteId: crypto.AlgorithmSuiteIdentifier.ALG_AES256_GCM_IV12_TAG16_HKDF_SHA512_COMMIT_KEY,
+    });
+}
 
 export default  {
+    decryptionStream,
     encryptionStream,
     config
 }
