@@ -1,82 +1,83 @@
-import supertest from 'supertest';
-import path from 'path';
-import fs from 'fs';
-import { BufferWritableMock, DuplexMock, ObjectWritableMock } from 'stream-mock';
+import supertest from "supertest";
+import path from "path";
+import {
+  BufferWritableMock,
+  DuplexMock,
+  ObjectWritableMock,
+} from "stream-mock";
 
 // to mock..
-import * as crypto from '@aws-crypto/client-node';
-import CryptoService from '../services/CryptoService.js';
-import S3Service from '../services/S3Service.js';
+import CryptoService from "../services/CryptoService.js";
+import S3Service from "../services/S3Service.js";
 
-jest.mock('@aws-crypto/client-node');
-jest.mock('../services/S3Service.js');
-jest.mock('../services/CryptoService.js');
+import app from "../app.js";
+import { PassThrough } from "stream";
 
-import app from '../app.js';
-import { PassThrough } from 'stream';
+jest.mock("@aws-crypto/client-node");
+jest.mock("../services/S3Service.js");
+jest.mock("../services/CryptoService.js");
 
 const appInstance = app();
 
-const filePath =  path.resolve(__dirname, '../uploads/test_data.txt');
+const filePath = path.resolve(__dirname, "../uploads/test_data.txt");
 
-describe('Storage', () => {
-    
-    it('happy path', async () => {
+describe("Storage", () => {
+  it("happy path", async () => {
+    const encryptionStream = new PassThrough();
+    const writeStream = new BufferWritableMock();
 
-        const encryptionStream = new PassThrough();
-        const writeStream = new BufferWritableMock();
+    CryptoService.encryptionStream.mockImplementation(() => encryptionStream);
+    S3Service.uploadFromStream.mockImplementation(() => writeStream);
 
-        CryptoService.encryptionStream.mockImplementation(()=> encryptionStream);
-        S3Service.uploadFromStream.mockImplementation(() => writeStream);
+    const result = await supertest(appInstance)
+      .post("/v1/store")
+      .query({ "skip-encryption": "false" })
+      .set("connection", "keep-alive")
+      .attach("file", filePath);
 
-        const result = await supertest(appInstance)
-            .post('/v1/store')
-            .attach('file', filePath);
+    expect(result.statusCode).toBe(200);
+  });
 
-        expect(result.statusCode).toBe(200);
-    });
+  it("stream exception from encryption stream", async () => {
+    const encryptionStream = new DuplexMock();
+    encryptionStream._read = () => {
+      throw new Error("Test Exception");
+    };
+    const writeStream = new BufferWritableMock();
 
-    
-    
-    it('stream exception from encryption stream',  (done) => {
+    CryptoService.encryptionStream.mockImplementation(() => encryptionStream);
+    S3Service.uploadFromStream.mockImplementation(() => writeStream);
 
-        const encryptionStream = new DuplexMock();
-        encryptionStream._read = () => { 
-            throw new Error('Test Exception') 
-        };
-        const writeStream = new BufferWritableMock();
+    const result = await supertest(appInstance)
+      .post("/v1/store")
+      .query({ "skip-encryption": "true" })
+      .set("connection", "keep-alive")
+      .attach("file", filePath);
 
-        CryptoService.encryptionStream.mockImplementation(()=> encryptionStream);
-        S3Service.uploadFromStream.mockImplementation(() => writeStream);
+    expect(result.statusCode).toBe(500);
+    expect(result.body.status).toBe("Error");
+  });
 
-        const result = supertest(appInstance)
-            .post('/v1/store')
-            .attach('file', filePath);
-            // .end((err, res) => {
-            //     expect(res.statusCode).toBe(500);
-            //     done();
-            // });
-    });
+  it(
+    "error in S3 stream",
+    async () => {
+      const encryptionStream = new PassThrough();
+      const writeStream = new ObjectWritableMock();
+      writeStream._write = (chunk, enc, next) =>
+        next(new Error("Test Exception"));
 
-    it.only('error in encryption stream', async () => {
-        const encryptionStream = new PassThrough();
-        const writeStream = new ObjectWritableMock();
-        writeStream._write = (chunk, enc, next) => 
-            next(new Error('Test Exception'));
-        
+      CryptoService.encryptionStream.mockImplementation(() => encryptionStream);
+      S3Service.uploadFromStream.mockImplementation(() => writeStream);
 
-        CryptoService.encryptionStream.mockImplementation(()=> encryptionStream);
-        S3Service.uploadFromStream.mockImplementation(() => writeStream);
-     
-        const file = fs.createReadStream(filePath);
-        
-        const result = await supertest(appInstance)
-            .post("/v1/store?skip-encryption=false")
-            .attach('file', file)
-        
-        expect(result.statusCode).toBe(500);
-        expect(result.body.status).toBe('Encryption Error');
-        
-    }, 10*1000
-    );
+      const result = await supertest(appInstance)
+        .post("/v1/store")
+        .query({ "skip-encryption": "true" }) // <-- add query string
+        .set("connection", "keep-alive")
+        .attach("file", filePath);
+
+      expect(result.statusCode).toBe(500);
+      expect(result.body.status).toBe("Error");
+    },
+    10 * 1000
+  );
 });
